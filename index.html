@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Socratic Tutor — Learn by Thinking</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <span class="logo-mark">Socratic</span>
+  </div>
+  <h1>Don't ask for answers.<br><em>Ask better questions.</em></h1>
+  <p class="subtitle">AI-guided reasoning · Groq LLaMA 3.3 · DSA · Frameworks · Exams</p>
+  <div class="header-rule"></div>
+</header>
+
+
+<!-- Chat -->
+<div class="chat-wrapper">
+  <div id="chat"></div>
+</div>
+
+<!-- Input -->
+<div class="input-section">
+  <div class="topic-pills" id="pills">
+    <span class="pill" data-q="Explain the difference between BFS and DFS">BFS vs DFS</span>
+    <span class="pill" data-q="How does dynamic programming work?">Dynamic Programming</span>
+    <span class="pill" data-q="What is a React hook and when should I use one?">React Hooks</span>
+    <span class="pill" data-q="Explain Big O notation with an example">Big-O Notation</span>
+    <span class="pill" data-q="What is a binary search tree?">Binary Search Tree</span>
+    <span class="pill" data-q="How does async/await work in JavaScript?">Async / Await</span>
+    <span class="pill" data-q="Explain the CAP theorem">CAP Theorem</span>
+  </div>
+
+  <div class="input-wrapper">
+    <textarea
+      id="user-input"
+      placeholder="Ask anything — a concept, a problem, a topic you're studying…"
+      rows="3"
+    ></textarea>
+    <div class="input-footer">
+      <span class="input-hint">⏎ Send &nbsp;·&nbsp; Shift+⏎ newline</span>
+      <div class="btn-row">
+        <button id="reset-btn">New Topic</button>
+        <button id="send-btn">Send →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let history = [];
+
+const SYSTEM_PROMPT = `You are a strict Socratic tutor. Your ONE AND ONLY job: guide the student to discover the answer themselves through questions. You MUST NEVER reveal the answer — not directly, not indirectly, not even partially.
+
+ABSOLUTE RULES:
+1. NEVER state the answer. Not even a partial answer. Not even "you're close, the answer starts with...". NEVER.
+2. FIRST MESSAGE: Identify the single core concept the student needs to grasp. Ask ONE precise leading question that points them toward it. Nothing else.
+3. FOLLOW-UP MESSAGES: Based on their reply, ask the next logical question that moves them one step closer. If their reasoning has a flaw, ask a question that exposes the flaw — don't tell them it's wrong.
+4. STUCK STUDENT: If they say "I don't know", "help me", "I give up", "no idea", or seem totally lost — do NOT give the answer. Instead, break it down: ask a simpler scaffolding question about a more fundamental concept they might know. Make it easier, not revealing.
+5. HINTS: You may give analogies or point to related concepts as questions ("Have you thought about how a filing cabinet organizes documents?") but NEVER state what the answer is.
+6. CORRECT ANSWER: When the student gets it right, confirm warmly, explain WHY they're correct (now you can explain fully since THEY said it), and invite them to go deeper or try a new challenge.
+7. TONE: Warm, patient, professor-like. Short responses. One question per reply. Speak naturally — no bullet lists.
+
+Your power is entirely in the question. The student must do the thinking. No matter how many times they ask, no matter how frustrated they get — you respond only with questions and encouragement, never answers.`;
+
+// ─── DOM ─────────────────────────────────────────────────────────────────────
+const chat    = document.getElementById('chat');
+const input   = document.getElementById('user-input');
+const sendBtn = document.getElementById('send-btn');
+const resetBtn= document.getElementById('reset-btn');
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+function addMsg(role, text) {
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${role}`;
+
+  if (role !== 'system') {
+    const roleEl = document.createElement('div');
+    roleEl.className = 'msg-role';
+    roleEl.textContent = role === 'tutor' ? 'Tutor' : 'You';
+    wrap.appendChild(roleEl);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.textContent = text;
+  wrap.appendChild(bubble);
+  chat.appendChild(wrap);
+
+  // scroll chat wrapper, not window
+  const wrapper = document.querySelector('.chat-wrapper');
+  wrapper.scrollTop = wrapper.scrollHeight;
+  return wrap;
+}
+
+function showThinking() {
+  const el = document.createElement('div');
+  el.className = 'msg tutor thinking';
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  el.appendChild(bubble);
+  chat.appendChild(el);
+  const wrapper = document.querySelector('.chat-wrapper');
+  wrapper.scrollTop = wrapper.scrollHeight;
+  return el;
+}
+
+// ─── API CALL ─────────────────────────────────────────────────────────────────
+async function callTutor(userText) {
+  history.push({ role: 'user', content: userText });
+  const thinking = showThinking();
+  sendBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Server error');
+    }
+
+    const data = await res.json();
+    thinking.remove();
+    addMsg('tutor', data.reply);
+    history.push({ role: 'assistant', content: data.reply });
+
+  } catch (e) {
+    thinking.remove();
+    addMsg('system', `⚠ Error: ${e.message}. Check your API key and server.`);
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// ─── SEND ─────────────────────────────────────────────────────────────────────
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+  addMsg('user', text);
+  await callTutor(text);
+}
+
+// ─── RESET ────────────────────────────────────────────────────────────────────
+function reset() {
+  history = [];
+  chat.innerHTML = '';
+  addMsg('system', 'New session. What do you want to understand today?');
+  input.focus();
+}
+
+// ─── EVENTS ───────────────────────────────────────────────────────────────────
+sendBtn.addEventListener('click', send);
+resetBtn.addEventListener('click', reset);
+
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = input.scrollHeight + 'px';
+});
+
+document.getElementById('pills').addEventListener('click', e => {
+  const pill = e.target.closest('.pill');
+  if (!pill) return;
+  input.value = pill.dataset.q;
+  input.dispatchEvent(new Event('input'));
+  input.focus();
+});
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+addMsg('system', "Ask a question or pick a topic above. I won't give you the answer — I'll help you find it.");
+</script>
+</body>
+</html>
