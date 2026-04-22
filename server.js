@@ -1,28 +1,27 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
 const path = require("path");
 
 const app = express();
 
-// CORS (must be first)
-app.use(cors({
-  origin: "https://socratictutorr.netlify.app",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"]
-}));
+/* ---------------- CORS (HARD FIX) ---------------- */
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "https://socratictutorr.netlify.app");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-// Explicit preflight handler
-app.options("*", cors());
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
 
-// Body parsers
+  next();
+});
+
+/* ---------------- BODY PARSING ---------------- */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static files (optional)
-app.use(express.static(path.join(__dirname)));
-
-// Route
+/* ---------------- ROUTE ---------------- */
 app.post("/api/chat", async (req, res) => {
   const { messages } = req.body;
 
@@ -31,37 +30,39 @@ app.post("/api/chat", async (req, res) => {
   }
 
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages,
-        temperature: 0.7,
-        max_tokens: 600,
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      return res.status(response.status).json({ error: err });
-    }
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages,
+          temperature: 0.7,
+          max_tokens: 600,
+        }),
+      }
+    );
 
     const data = await response.json();
 
-    res.json({
-      reply: data.choices?.[0]?.message?.content || ""
-    });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data });
+    }
 
+    res.json({
+      reply: data.choices?.[0]?.message?.content || "",
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+/* ---------------- START SERVER ---------------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Socratic Tutor running → ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
