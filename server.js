@@ -1,21 +1,34 @@
 require("dotenv").config();
 const express = require("express");
-const path = require("path");
 const cors = require("cors");
+const path = require("path");
 
 const app = express();
+
+// CORS (must be first)
 app.use(cors({
   origin: "https://socratictutorr.netlify.app",
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"]
 }));
 
-app.options("*", cors());app.use(express.json());
+// Explicit preflight handler
+app.options("*", cors());
+
+// Body parsers
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Static files (optional)
 app.use(express.static(path.join(__dirname)));
 
+// Route
 app.post("/api/chat", async (req, res) => {
   const { messages } = req.body;
-  if (!messages) return res.status(400).json({ error: "messages required" });
+
+  if (!messages) {
+    return res.status(400).json({ error: "messages required" });
+  }
 
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -38,11 +51,17 @@ app.post("/api/chat", async (req, res) => {
     }
 
     const data = await response.json();
-    res.json({ reply: data.choices[0].message.content });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+
+    res.json({
+      reply: data.choices?.[0]?.message?.content || ""
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Socratic Tutor running → http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Socratic Tutor running → ${PORT}`);
+});
