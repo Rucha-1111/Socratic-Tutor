@@ -4,24 +4,12 @@ const path = require("path");
 
 const app = express();
 
-/* ---------------- CORS (HARD FIX) ---------------- */
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "https://socratictutorr.netlify.app");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
-
-/* ---------------- BODY PARSING ---------------- */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ---------------- ROUTE ---------------- */
+// Serve index.html from the SAME folder as server.js
+app.use(express.static(__dirname));
+
 app.post("/api/chat", async (req, res) => {
   const { messages } = req.body;
 
@@ -61,8 +49,7 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-/* ---------------- START SERVER ---------------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running → http://localhost:${PORT}`);
 });
