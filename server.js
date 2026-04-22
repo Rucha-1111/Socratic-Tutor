@@ -4,8 +4,13 @@ const path = require("path");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: "https://socratictutorr.netlify.app",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
+}));
+
+app.options("*", cors());app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
 app.post("/api/chat", async (req, res) => {
